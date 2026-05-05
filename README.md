@@ -72,6 +72,44 @@ The API will be available at: `http://localhost:8000`
 
 **Interactive API Documentation**: `http://localhost:8000/docs`
 
+## Windows Quick Start
+
+If you're on Windows there are helper scripts included to speed setup and development.
+
+- Use `setup_complete.bat` to check prerequisites and install both backend and frontend dependencies.
+  ```powershell
+  setup_complete.bat
+  ```
+
+- Use `run_server.bat` to quickly start the backend (it checks for a `.env` file first):
+  ```powershell
+  run_server.bat
+  ```
+
+- If you need to create an `.env` from the example on Windows:
+  ```powershell
+  copy .env.example .env
+  # then edit .env with your Redis and AI API credentials (use Notepad or VS Code)
+  notepad .env
+  ```
+
+## Scripts (what they do)
+
+- `setup_complete.bat` — Verifies Python and Node.js are installed, runs `pip install -r requirements.txt`, then runs `npm install` inside the `frontend` folder. Use this once when you first set up the project on Windows.
+- `run_server.bat` — Verifies a `.env` file exists and then runs the backend with `uvicorn app.main:app --reload --host 0.0.0.0 --port 8000`.
+
+Both scripts are convenience wrappers for Windows developers; you can run the underlying commands manually on any platform.
+
+## Running Tests
+
+There is a simple integration test script to exercise the API. Start the server first, then run:
+
+```bash
+python test_api.py
+```
+
+The script performs a health check, creates a room (AI generation), retrieves questions, joins a player, starts the game, submits an answer, and checks the leaderboard. Ensure `requests` is installed (it's included in `requirements.txt`).
+
 ## API Endpoints
 
 ### Room Management
