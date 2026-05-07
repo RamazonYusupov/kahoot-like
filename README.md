@@ -72,6 +72,28 @@ The API will be available at: `http://localhost:8000`
 
 **Interactive API Documentation**: `http://localhost:8000/docs`
 
+## Docker
+
+Run the backend with Docker (includes Redis via docker-compose):
+
+Build and start with Docker Compose:
+
+```bash
+docker compose up --build
+```
+
+Or build image and run manually:
+
+```bash
+docker build -t kahoot-api .
+docker run -e REDIS_HOST=host.docker.internal -p 8000:8000 kahoot-api
+```
+
+Notes:
+- With `docker compose` the `redis` service is available as the hostname `redis` (no extra env needed).
+- On Windows or macOS, use `host.docker.internal` if you want the container to connect to a Redis server running on the host machine.
+
+
 ## Windows Quick Start
 
 If you're on Windows there are helper scripts included to speed setup and development.

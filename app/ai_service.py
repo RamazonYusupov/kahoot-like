@@ -2,6 +2,7 @@ import json
 import re
 import httpx
 import hashlib
+import asyncio
 from typing import List, Dict, Any
 from app.config import settings
 from app.redis_client import redis_client
@@ -149,7 +150,7 @@ Return ONLY the JSON array, no other text."""
 
     @staticmethod
     async def _call_gemini(prompt: str, question_count: int) -> List[Dict[str, Any]]:
-        """Call Gemini API."""
+        """Call Gemini API with retry logic for transient errors."""
         async with httpx.AsyncClient() as client:
             headers = {
                 "Content-Type": "application/json",
@@ -201,26 +202,58 @@ Return ONLY the JSON array, no other text."""
                 model_candidates.append("gemini-2.5-flash")
 
             last_response = None
+            last_error = None
+            
+            # Retry on transient errors (429, 5xx)
             for model in model_candidates:
-                response = await client.post(
-                    f"https://generativelanguage.googleapis.com/v1beta/models/{model}:generateContent?key={settings.AI_API_KEY}",
-                    json=payload,
-                    headers=headers,
-                    timeout=30.0,
-                )
+                attempt = 0
+                while attempt < 3:
+                    try:
+                        response = await client.post(
+                            f"https://generativelanguage.googleapis.com/v1beta/models/{model}:generateContent?key={settings.AI_API_KEY}",
+                            json=payload,
+                            headers=headers,
+                            timeout=30.0,
+                        )
 
-                if response.status_code != 404:
-                    response.raise_for_status()
-                    data = response.json()
+                        if response.status_code == 404:
+                            last_response = response
+                            break  # try next model
 
-                    content = data["candidates"][0]["content"]["parts"][0]["text"]
-                    return AIService._parse_questions(content)
+                        response.raise_for_status()
+                        data = response.json()
 
-                last_response = response
+                        content = data["candidates"][0]["content"]["parts"][0]["text"]
+                        return AIService._parse_questions(content)
 
+                    except httpx.HTTPStatusError as exc:
+                        status = exc.response.status_code if exc.response is not None else None
+                        # Retry on 429 or 5xx
+                        if status in (429, 500, 502, 503, 504):
+                            wait = 2 ** attempt
+                            attempt += 1
+                            if attempt < 3:
+                                await asyncio.sleep(wait)
+                            last_response = exc.response
+                            last_error = exc
+                            continue
+                        # For other HTTP errors, re-raise
+                        raise
+                    except (httpx.RequestError, asyncio.TimeoutError) as exc:
+                        # Network issue or timeout — retry a few times
+                        attempt += 1
+                        if attempt < 3:
+                            await asyncio.sleep(2 ** attempt)
+                        last_response = None
+                        last_error = exc
+                        continue
+
+            # If we got here, all attempts/models failed
+            if last_error is not None:
+                raise last_error
             if last_response is not None:
                 last_response.raise_for_status()
-            raise RuntimeError("Gemini model not found")
+            raise RuntimeError("Gemini model not available or requests failed")
     
     @staticmethod
     def _parse_questions(response_text: str) -> List[Dict[str, Any]]:
